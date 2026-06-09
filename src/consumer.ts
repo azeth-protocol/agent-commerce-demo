@@ -68,10 +68,14 @@ export async function runConsumer(): Promise<void> {
   // 4. Check reputation before trusting
   log('\nChecking provider reputation...');
   const reputation = await agent.getWeightedReputation(service.tokenId);
-  log(`  Composite score: ${chalk.bold(String(reputation.compositeScore))}/100`);
-  log(`  Total interactions: ${reputation.totalInteractions}`);
+  // weightedValue is 18-decimal fixed point on a -100..100 scale, weighted by USD paid
+  const score = reputation.opinionCount > 0n ? Number(reputation.weightedValue) / 1e18 : 0;
+  log(`  Weighted score: ${chalk.bold(score.toFixed(1))} (range -100..100)`);
+  log(`  Opinions: ${reputation.opinionCount}`);
 
-  if (reputation.compositeScore < 20) {
+  if (reputation.opinionCount === 0n) {
+    log(chalk.yellow('  No ratings yet — proceeding with caution (small payment)'));
+  } else if (score < 20) {
     log(chalk.yellow('  Low reputation — proceeding with caution (small payment)'));
   } else {
     log(chalk.green('  Reputation acceptable — proceeding with payment'));
@@ -94,16 +98,23 @@ export async function runConsumer(): Promise<void> {
   log(`  Response time: ${responseTimeMs}ms`);
 
   // 6. Rate the provider on-chain
+  // Opinions are payment-gated: the ReputationModule requires >= $1 net USD paid
+  // to the provider before accepting a rating (anti-Sybil protection).
   log('\nSubmitting on-chain reputation feedback...');
-  const qualityScore = responseTimeMs < 2000 ? 90 : responseTimeMs < 5000 ? 70 : 50;
-  await agent.submitOpinion({
-    serviceTokenId: service.tokenId,
-    success: true,
-    responseTimeMs,
-    qualityScore,
-  });
-  log(`  Opinion submitted! Quality: ${qualityScore}/100`);
-  log(`  Provider's reputation has been updated on-chain.`);
+  const rating = responseTimeMs < 2000 ? 90 : responseTimeMs < 5000 ? 70 : 50;
+  try {
+    await agent.submitOpinion({
+      serviceTokenId: service.tokenId,
+      rating, // -100 to 100
+      tag1: 'quality',
+      endpoint: service.endpoint,
+    });
+    log(`  Opinion submitted! Rating: ${rating}/100`);
+    log(`  Provider's reputation has been updated on-chain.`);
+  } catch (err) {
+    log(chalk.yellow(`  Opinion not accepted yet: ${err instanceof Error ? err.message : String(err)}`));
+    log(chalk.yellow('  Ratings unlock after >= $1 total net payment to the provider.'));
+  }
 
   log(chalk.bold('\nComplete! The trust flywheel turns.'));
 }

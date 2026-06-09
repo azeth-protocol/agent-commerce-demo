@@ -14,7 +14,12 @@ import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import chalk from 'chalk';
 import { AzethKit } from '@azeth/sdk';
-import { createX402StackFromEnv, paymentMiddlewareFromHTTPServer } from '@azeth/provider';
+import {
+  CAIP2_NETWORKS,
+  createX402StackFromEnv,
+  paymentMiddlewareFromHTTPServer,
+  type RoutesConfig,
+} from '@azeth/provider';
 
 const PORT = 3402;
 
@@ -59,21 +64,32 @@ async function main() {
   // 3. Register on trust registry
   log('Publishing service on trust registry...');
   const reg = await agent.publishService({
+    name: 'WeatherOracle',
+    description: 'Real-time weather data for AI agents',
+    entityType: 'service',
     capabilities: ['weather-data'],
     endpoint: `http://localhost:${PORT}`,
   });
   log(`Registered! TokenId: ${chalk.bold(String(reg.tokenId))}`);
 
   // 4. Set up x402 paywall
-  const routes = {
+  // Payments go to the smart account (not the EOA) so consumers can rate this service.
+  const payTo = agent.smartAccount ?? (await agent.resolveSmartAccount());
+
+  const routes: RoutesConfig = {
     'GET /api/weather/:city': {
-      price: '$0.001',
-      network: 'base-sepolia',
+      accepts: {
+        scheme: 'exact',
+        price: '$0.001',
+        network: CAIP2_NETWORKS[chain],
+        payTo,
+      },
       description: 'Weather data for a city',
+      mimeType: 'application/json',
     },
   };
 
-  const x402 = createX402StackFromEnv(routes);
+  const x402 = await createX402StackFromEnv(routes, { payTo });
 
   // 5. Build Hono app
   const app = new Hono();

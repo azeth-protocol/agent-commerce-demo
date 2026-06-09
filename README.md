@@ -81,7 +81,7 @@ A provider with an Azeth smart account is a **first-class participant** in the m
 
 ## Links
 
-- [Azeth MCP Server](https://www.npmjs.com/package/@azeth/mcp-server) — 32 tools for AI agents
+- [Azeth MCP Server](https://www.npmjs.com/package/@azeth/mcp-server) — 34 tools for AI agents
 - [Azeth SDK](https://www.npmjs.com/package/@azeth/sdk) — TypeScript SDK
 - [Agent Starter Template](https://github.com/azeth-protocol/agent-starter) — Fork and build
 - [Website](https://azeth.ai)
